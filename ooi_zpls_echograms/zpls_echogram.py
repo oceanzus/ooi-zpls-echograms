@@ -3,6 +3,7 @@
 import argparse
 import cmocean
 import dateutil.parser as dparser
+import echopype as ep
 import glob
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -13,9 +14,8 @@ import xarray as xr
 
 from calendar import monthrange
 from datetime import datetime, date, timedelta
-from echopype.convert import Convert
-from echopype.process import Process
 from pandas.plotting import register_matplotlib_converters
+from pathlib import Path
 from PIL import Image
 
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -195,7 +195,7 @@ attributes = {
     'range_bin': {
         'long_name': 'Vertical Range Bin Number',
         'comment': 'Bin number starting with 0 at the sensor face, used to derive the vertical range.',
-        # 'units': ''    # deliberately left blank, no units for this value
+        'units': 'count'
     },
     'range': {
         'long_name': 'Vertical Range',
@@ -452,21 +452,21 @@ def process_azfp(site, data_directory, xml_file, output_directory, dates, tilt_c
         os.mkdir(output_directory)
 
     # convert the list of .01A files using echopype and save the output as NetCDF files
-    dc = Convert(file_list, xml_file)
-    dc.platform_name = site         # OOI site name
-    dc.platform_type = 'Mooring'    # ICES platform type
-    dc.platform_code_ICES = '48'    # ICES code: tethered collection of instruments at a fixed location that may
-                                    # include seafloor, mid-water or surface components
-    dc.raw2nc(save_path=output_directory)
-
-    # process the data, calculating the volume acoustic backscatter strength and the vertical range
     echo = []
-    nc_files = glob.glob(output_directory + '/[12]???????.nc')
-    for nc in nc_files:
-        tmp_echo = Process(nc)
-        tmp_echo.calibrate()                                   # calculate Sv
-        data = tmp_echo.Sv                                     # extract the Sv dataset
-        echo.append(data.sortby('ping_time'))                  # append to the echogram list
+    for raw_file in file_list:
+        ds = ep.open_raw(raw_file, sonar_model='AZFP', xml_path=xml_file)
+        ds.platform_name = site         # OOI site name
+        ds.platform_type = 'Mooring'    # ICES platform type
+        ds.platform_code_ICES = '48'    # ICES code: tethered collection of instruments at a fixed location that may
+                                        # include seafloor, mid-water or surface components
+
+        # save the data to a NetCDF file (will automatically skip if already created)
+        ds.to_netcdf(Path(output_directory))
+
+        # process the data, calculating the volume acoustic backscatter strength and the vertical range
+        ds_sv = ep.calibrate.compute_Sv(ds)             # calculate Sv
+        data = ds_sv[['Sv', 'range']]                   # extract the Sv and range data
+        echo.append(data.sortby('ping_time'))           # append to the echogram list
 
     # concatenate the data into a single dataset
     data = xr.concat(echo, dim='ping_time', join='outer')
@@ -508,29 +508,25 @@ def process_ek60(site, data_directory, output_directory, dates, tilt_correction)
         os.mkdir(output_directory)
 
     # convert the list of .raw files using echopype and save the output as NetCDF files
-    dc = Convert(file_list)
-    dc.platform_name = site      # OOI site name
-    if site == 'CE02SHBP':
-        dc.platform_type = 'Fixed Benthic Node'    # ICES platform type
-        dc.platform_code_ICES = '11'               # ICES code
-    else:
-        dc.platform_type = 'Mooring'    # ICES platform type
-        dc.platform_code_ICES = '48'    # ICES code: tethered collection of instruments at a fixed location that may
-                                        # include seafloor, mid-water or surface components
-    dc.raw2nc(save_path=output_directory)
-
-    # process the data, calculating the volume acoustic backscatter strength and the vertical range
     echo = []
-    sample_thickness = []
-    tvg_correction_factor = []
-    nc_files = glob.glob(output_directory + '/*OOI-D*.nc')
-    for nc in nc_files:
-        tmp_echo = Process(nc)
-        tmp_echo.calibrate()                                   # calculate Sv
-        data = tmp_echo.Sv                                     # extract the Sv dataset
-        echo.append(data.sortby('ping_time'))                  # append to the echogram list
-        sample_thickness.append(tmp_echo.sample_thickness.values)
-        tvg_correction_factor.append(tmp_echo.tvg_correction_factor)
+    for raw_file in file_list:
+        # load the raw file, creating an xarray dataset object
+        ds = ep.open_raw(raw_file, sonar_model='EK60')
+        ds.platform_name = site                         # OOI site name
+        if site == 'CE02SHBP':
+            ds.platform_type = 'Fixed Benthic Node'     # ICES platform type
+            ds.platform_code_ICES = '11'                # ICES code
+        else:
+            ds.platform_type = 'Subsurface Mooring'     # ICES platform type
+            ds.platform_code_ICES = '43'                # ICES code
+
+        # save the data to a NetCDF file (will automatically skip if already created)
+        ds.to_netcdf(Path(output_directory))
+
+        # process the data, calculating the volume acoustic backscatter strength and the vertical range
+        ds_sv = ep.calibrate.compute_Sv(ds)             # calculate Sv
+        data = ds_sv[['Sv', 'range']]                   # extract the Sv and range data
+        echo.append(data.sortby('ping_time'))           # append to the echogram list
 
     # concatenate the data into a single dataset
     data = xr.concat(echo, dim='ping_time', join='outer')
@@ -538,12 +534,6 @@ def process_ek60(site, data_directory, output_directory, dates, tilt_correction)
     data['range_bin'] = data['range_bin'].astype(np.int32)
     data['range'] = data['range'].sel(ping_time=data.ping_time[0], drop=True)
     data = data.set_coords('range')
-
-    # recalculate the range to deal with some discrepancies caused by the xarray concat
-    thickness = np.max(np.array(sample_thickness), 0)
-    correction_factor = np.max(tvg_correction_factor)
-    range_meter = calc_range(data, thickness, correction_factor)
-    data['range'] = data['range'].fillna(range_meter)
 
     if tilt_correction:
         range_correction(data, tilt_correction)  # apply a tilt correction, if applicable
