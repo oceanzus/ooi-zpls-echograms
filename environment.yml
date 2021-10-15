@@ -3,42 +3,13 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python>=3.7
+  - python>=3.8
   - pip
-  - black
-  - bottleneck
-  - check-manifest
   - cmocean
-  - dask[array]
-  - echopype
-  - flake8
-  - flake8-builtins
-  - flake8-comprehensions
-  - flake8-mutable
-  - flake8-print
-  - isort
-  - h5py
-  - h5netcdf
+  - echopype==0.5.4
   - matplotlib
-  - mypy
-  - netCDF4
   - numpy
-  - numpydoc
+  - pandas
   - pillow
-  - pre-commit
-  - pylint
-  - pytest
-  - pynmea2
-  - pytest-cov
-  - pytest-flake8
-  - pytest-xdist
-  - pytz
-  - scipy
-  - setuptools_scm
-  - sphinx
-  - sphinx-automodapi
-  - twine
-  - wheel
+  - python-dateutil
   - xarray
-  - zarr
-

@@ -470,11 +470,14 @@ def process_azfp(site, data_directory, xml_file, output_directory, dates, tilt_c
 
     # concatenate the data into a single dataset
     data = xr.concat(echo, dim='ping_time', join='outer')
-    data = data.sortby(['frequency', 'ping_time'])
-    data['frequency'] = data['frequency'].astype(np.float32)
+
+    # convert the data type for range_bin and setup range as a coordinate variable
     data['range_bin'] = data['range_bin'].astype(np.int32)
     data['range'] = data['range'].sel(ping_time=data.ping_time[0], drop=True)
     data = data.set_coords('range')
+
+    # sort the data by the frequency and the time
+    data = data.sortby(['frequency', 'ping_time'])
 
     if tilt_correction:
         range_correction(data, tilt_correction)  # apply a tilt correction, if applicable
@@ -530,10 +533,14 @@ def process_ek60(site, data_directory, output_directory, dates, tilt_correction)
 
     # concatenate the data into a single dataset
     data = xr.concat(echo, dim='ping_time', join='outer')
-    data = data.sortby(['frequency', 'ping_time'])
+
+    # convert the data type for range_bin and setup range as a coordinate variable
     data['range_bin'] = data['range_bin'].astype(np.int32)
     data['range'] = data['range'].sel(ping_time=data.ping_time[0], drop=True)
     data = data.set_coords('range')
+
+    # sort the data by the frequency and the time
+    data = data.sortby(['frequency', 'ping_time'])
 
     if tilt_correction:
         range_correction(data, tilt_correction)  # apply a tilt correction, if applicable
@@ -623,6 +630,9 @@ def main(argv=None):
     # save the full resolution data to daily NetCDF files
     file_name = set_file_name(site, dates)
     output_directory = os.path.join(output_directory, dates[0] + '-' + dates[1])
+
+    # clean up any NaN's in the range values (some EK60 files seem to have this problem)
+    data = data.dropna('range_bin', subset=['range'])
 
     # reset a couple data types (helps to control size of NetCDF files)
     data['range'] = data['range'].astype(np.float32)
