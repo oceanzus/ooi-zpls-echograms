@@ -1,9 +1,9 @@
-#OOI Bioacoustic Sonar Processing and Echogram Generation
+# OOI Bioacoustic Sonar Processing and Echogram Generation
 
 **Authors**
 James Kuo, jkuo@whoi.edu; Stephanie Petillo, spetillo@whoi.edu; and Christopher Wingard, chris.wingard@oregonstate.edu  
 
-##Description
+## Description
 
 The Ocean Observatories Initiative (OOI) collects ocean sonar, or bioacoustic sonar data, from most of the sites that
 comprise the different Coastal and Global arrays. The sensor type used depends on whether the site is cabled or 
