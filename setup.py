@@ -17,14 +17,14 @@ setup(name='ooi_zpls_echograms',
           'Convert the raw data files from the OOI ocean sonar systems into '
           'processed NetCDF files and echogram plots (using the open source '
           'echopype package) to facilitate user access to, and exploration '
-          'of, the data collected across the multiple OOI arrays.' 
+          'of, the bio-acoustic data collected across the multiple OOI arrays.'
       ),
       long_description=readme(),
       classifiers=[
           'Development Status :: 3 - Alpha',
           'License :: OSI Approved :: MIT License',
           'Programming Language :: Python :: 3.8',
-          'Topic :: Data Parsing :: Scientific :: OOI',
+          'Topic :: Data Parsing :: Scientific :: OOI :: Ocean Sonar :: Zooplankton',
       ],
       keywords=(
           'OOI Cabled Endurance Global Pioneer zooplankton echogram acoustic sonar ocean'
