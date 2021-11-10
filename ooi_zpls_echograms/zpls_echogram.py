@@ -27,6 +27,7 @@ site_config = {
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 25],
         'deployed_depth': 25,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'CE02SHBP': {
@@ -35,6 +36,7 @@ site_config = {
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 80],
         'deployed_depth': 80,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'CE04OSPS': {
@@ -43,6 +45,7 @@ site_config = {
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 200],
         'deployed_depth': 200,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'CE06ISSM': {
@@ -51,6 +54,7 @@ site_config = {
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 30],
         'deployed_depth': 29,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'CE07SHSM': {
@@ -59,6 +63,7 @@ site_config = {
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 87],
         'deployed_depth': 87,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'CE09OSSM': {
@@ -67,6 +72,7 @@ site_config = {
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 540],
         'deployed_depth': 542,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'CP04OSSM': {
@@ -75,6 +81,7 @@ site_config = {
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 460],
         'deployed_depth': 450,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'CP03ISSM': {
@@ -83,6 +90,7 @@ site_config = {
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 100],
         'deployed_depth': 95,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'CP01CNSM': {
@@ -91,6 +99,7 @@ site_config = {
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 140],
         'deployed_depth': 135,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'GI02HYPM_UPPER': {
@@ -99,6 +108,7 @@ site_config = {
         'colorbar_range': [-95, -65],
         'vertical_range': [0, 200],
         'deployed_depth': 150,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'GI02HYPM_LOWER': {
@@ -107,6 +117,7 @@ site_config = {
         'colorbar_range': [-95, -65],
         'vertical_range': [0, 400],
         'deployed_depth': 150,
+        'average_salinity': 34,
         'instrument_orientation': 'down'
     },
     'GP02HYPM_UPPER': {
@@ -115,6 +126,7 @@ site_config = {
         'colorbar_range': [-95, -65],
         'vertical_range': [0, 200],
         'deployed_depth': 150,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'GP02HYPM_LOWER': {
@@ -123,6 +135,7 @@ site_config = {
         'colorbar_range': [-95, -65],
         'vertical_range': [0, 400],
         'deployed_depth': 150,
+        'average_salinity': 34,
         'instrument_orientation': 'down'
     },
     'GA02HYPM_UPPER': {
@@ -131,6 +144,7 @@ site_config = {
         'colorbar_range': [-95, -65],
         'vertical_range': [0, 200],
         'deployed_depth': 150,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'GA02HYPM_LOWER': {
@@ -139,6 +153,7 @@ site_config = {
         'colorbar_range': [-95, -65],
         'vertical_range': [0, 400],
         'deployed_depth': 150,
+        'average_salinity': 34,
         'instrument_orientation': 'down'
     },
     'GS02HYPM_UPPER': {
@@ -147,6 +162,7 @@ site_config = {
         'colorbar_range': [-95, -65],
         'vertical_range': [0, 200],
         'deployed_depth': 150,
+        'average_salinity': 34,
         'instrument_orientation': 'up'
     },
     'GS02HYPM_LOWER': {
@@ -155,6 +171,7 @@ site_config = {
         'colorbar_range': [-95, -65],
         'vertical_range': [0, 400],
         'deployed_depth': 150,
+        'average_salinity': 34,
         'instrument_orientation': 'down'
     }
 }
@@ -348,24 +365,6 @@ def range_correction(data, tilt_correction):
     data['range'] = data.range * np.cos(np.deg2rad(tilt_correction))
 
 
-def calc_range(data, thickness, correction_factor):
-    """
-    Pulled from the echopype code to recalculate the range for EK60 data in
-    order to address issues with exporting the data to an xarray dataset and
-    then resampling.
-
-    :param data:
-    :param thickness:
-    :param correction_factor:
-    :return range_meter:
-    """
-    range_bin = np.atleast_2d(data.range_bin.values)
-    thickness = np.tile(thickness, [range_bin.shape[1], 1])
-    range_meter = thickness.T * range_bin - correction_factor * thickness.T
-    range_meter = np.where(range_meter > 0, range_meter, 0)
-    return range_meter
-
-
 def azfp_file_list(data_directory, dates):
     """
     Generate a list of file paths pointing to the .01A files that contain the
@@ -453,6 +452,10 @@ def process_azfp(site, data_directory, xml_file, output_directory, dates, tilt_c
 
     # convert the list of .01A files using echopype and save the output as NetCDF files
     echo = []
+    env_params = {
+        'salinity': site_config[site]['average_salinity'],  # salinity in PSU
+        'pressure': site_config[site]['deployed_depth'],  # approximate pressure (using depth m)
+    }
     for raw_file in file_list:
         ds = ep.open_raw(raw_file, sonar_model='AZFP', xml_path=xml_file)
         ds.platform_name = site         # OOI site name
@@ -464,7 +467,7 @@ def process_azfp(site, data_directory, xml_file, output_directory, dates, tilt_c
         ds.to_netcdf(Path(output_directory))
 
         # process the data, calculating the volume acoustic backscatter strength and the vertical range
-        ds_sv = ep.calibrate.compute_Sv(ds)             # calculate Sv
+        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)  # calculate Sv
         data = ds_sv[['Sv', 'range']]                   # extract the Sv and range data
         echo.append(data.sortby('ping_time'))           # append to the echogram list
 
