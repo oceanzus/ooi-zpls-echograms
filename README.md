@@ -32,16 +32,12 @@ the bioacoustic sonar sensors (a total of 17) are deployed.
 to process the OOI bioacoustic sonar data from the cabled and uncabled sensors to generate weekly echograms that 
 the user community can use to quickly assess the quality and applicability of the data to their research needs. 
 Additionally, preliminary processed data (saved to NetCDF files) is generated to facilitate access to the data in a
-standard format for others to use for further processing and analysis. The guiding philosophy is to present the 
-community with bioacoustic sonar data in multiple forms that can be used, much like a quick-look report, to zero in on 
-time periods and sites of interest rather than having to download and process all of the raw data before identifying 
-periods of interest. Thus, users are cautioned to consider the data made available through this processing as 
-preliminary only.
+standard format for others to use for further processing and analysis.
 
 This code was originally developed as part of the [ooicgsn-data-tools](https://github.com/oceanobservatories/ooicgsn-data-tools) 
 toolbox, but was extracted out to make it standalone and installable as a package for internal OOI use in processing 
 the realtime cabled data from [CE02SHBP](https://oceanobservatories.org/site/ce02shbp/) and 
-[CE04OSPS](https://oceanobservatories.org/site/ce04osps/)
+[CE04OSPS](https://oceanobservatories.org/site/ce04osps/).
 
 ## Installation and Setup
 
