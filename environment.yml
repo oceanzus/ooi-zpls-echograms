@@ -6,8 +6,8 @@ dependencies:
   - python>=3.8
   - pip
   - cmocean
-  - echopype==0.5.4
-  - h5netcdf==0.11.0
+  - echopype
+  - h5netcdf
   - matplotlib
   - numpy
   - pandas

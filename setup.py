@@ -23,7 +23,7 @@ setup(name='ooi_zpls_echograms',
       classifiers=[
           'Development Status :: 3 - Alpha',
           'License :: OSI Approved :: MIT License',
-          'Programming Language :: Python :: 3.8',
+          'Programming Language :: Python :: 3.10',
           'Topic :: Data Parsing :: Scientific :: OOI :: Ocean Sonar :: Zooplankton',
       ],
       keywords=(
@@ -37,7 +37,7 @@ setup(name='ooi_zpls_echograms',
       install_requires=[
           'cmocean',
           'python-dateutil',
-          'echopype==0.5.4',
+          'echopype',
           'matplotlib',
           'numpy',
           'pandas',
