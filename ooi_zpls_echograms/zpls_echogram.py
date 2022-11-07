@@ -18,6 +18,7 @@ from datetime import datetime, date, timedelta
 from pandas.plotting import register_matplotlib_converters
 from pathlib import Path
 from PIL import Image
+from tqdm import tqdm
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 register_matplotlib_converters()
@@ -88,12 +89,12 @@ site_config = {
         'average_temperature': 5,
         'instrument_orientation': 'up'
     },
-    'CP04OSSM': {
-        'long_name': 'Coastal Pioneer, Offshore Surface Mooring',
+    'CP01CNSM': {
+        'long_name': 'Coastal Pioneer, Central Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
-        'vertical_range': [0, 460],
-        'deployed_depth': 450,
+        'vertical_range': [0, 140],
+        'deployed_depth': 135,
         'depth_offset': 1.0,
         'average_salinity': 34,
         'average_temperature': 7,
@@ -110,12 +111,12 @@ site_config = {
         'average_temperature': 7,
         'instrument_orientation': 'up'
     },
-    'CP01CNSM': {
-        'long_name': 'Coastal Pioneer, Central Surface Mooring',
+    'CP04OSSM': {
+        'long_name': 'Coastal Pioneer, Offshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
-        'vertical_range': [0, 140],
-        'deployed_depth': 135,
+        'vertical_range': [0, 460],
+        'deployed_depth': 450,
         'depth_offset': 1.0,
         'average_salinity': 34,
         'average_temperature': 7,
@@ -241,9 +242,9 @@ attributes = {
         'standard_name': 'time',
         'units': 'seconds since 1970-01-01T00:00:00.000000Z',
         'calendar': 'gregorian',
-        'comment': ('Derived from the instrument internal clock. Instrument clocks are subject to drift. The data '
-                    'should be checked against other sensors to determine if drift and offset corrections are '
-                    'applicable.')
+        'comment': ('Derived from the instrument internal clock. Note, instrument clocks are subject to drift over '
+                    'the course of a deployment. The data should be checked against other sensors to determine if '
+                    'drift and offset corrections to the instrument clock are applicable.')
     },
     'range_sample': {
         'long_name': 'Vertical Range Bin Number',
@@ -271,6 +272,7 @@ attributes = {
         'units': 'dB ',
         'comments': ('Initial estimate of the volume acoustic backscatter strength derived from the raw instrument '
                      'data using echopype to convert and process the data.'),
+        'ooi_data_product': 'SONBSCA_L1',
         'references': 'https://echopype.readthedocs.io/en/latest/'
     }
 }
@@ -414,8 +416,8 @@ def range_correction(data, tilt_correction):
 
 def azfp_file_list(data_directory, dates):
     """
-    Generate a list of file paths pointing to the .01A files that contain the
-    dates the user has requested.
+    Generate a list of file paths pointing to the .01A files from an AZFP that
+    contain the dates the user has requested.
 
     :param data_directory: path to directory with the AZFP .01A files
     :param dates: starting and ending dates to use in generating the file list
@@ -443,12 +445,12 @@ def azfp_file_list(data_directory, dates):
 
 def ek60_file_list(data_directory, dates):
     """
-    Generate a list of file paths pointing to the .raw files that contain the
-    dates the user has requested.
+    Generate a list of file paths pointing to the .raw files from an EK60 that
+    contain the dates the user has requested.
 
-    :param data_directory: path to directory with the AZFP .01A files
+    :param data_directory: path to directory with the EK60 .raw files
     :param dates: starting and ending dates to use in generating the file list
-    :return file_list: list of potential .01A file names, including full path
+    :return file_list: list of potential .raw file names, including full path
     """
     if len(dates) == 1:
         dates += [dates[0]]
@@ -470,21 +472,27 @@ def ek60_file_list(data_directory, dates):
     return file_list
 
 
-def process_azfp(site, data_directory, xml_file, output_directory, dates, tilt_correction):
+def process_sonar_data(site, data_directory, output_directory, dates, zpls_model, xml_file, tilt_correction):
     """
-    Use echopype to convert and process the ASL AZFP bioacoustic sonar data
-    (in *.01A files) to generate echograms for use by the community.
+    Use echopype to convert and process the raw bioacoustic sonar data from
+    either an AZFP (in *.01A files), or an EK60 (in *.raw files) as the first
+    step in the process of generating daily and averaged processed NetCDF files
+    and echograms for use by the community.
 
     :param site:
     :param data_directory:
+    :param output_directory:
+    :param dates:
+    :param zpls_model:
     :param xml_file:
-    :param output_directory:
-    :param dates:
     :param tilt_correction:
-    :return data:
+    :return:
     """
     # generate a list of data files given the input dates
-    file_list = azfp_file_list(data_directory, dates)
+    if zpls_model == 'AZFP':
+        file_list = azfp_file_list(data_directory, dates)
+    else:
+        file_list = ek60_file_list(data_directory, dates)
 
     # reset the file_list to a single index
     file_list = [file for sub in file_list for file in sub]
@@ -501,50 +509,16 @@ def process_azfp(site, data_directory, xml_file, output_directory, dates, tilt_c
         os.mkdir(output_directory)
 
     # convert and process the raw files using echopype
-    echo = []
-    env_params = {
-        'temperature': site_config[site]['average_temperature'],  # temperature in degrees Celsius
-        'salinity': site_config[site]['average_salinity'],  # salinity in PSU
-        'pressure': site_config[site]['deployed_depth']     # approximate pressure (using depth m)
-    }
-    depth_offset = site_config[site]['depth_offset']  # height of sensor relative to site depth
-    downward = site_config[site]['instrument_orientation'] == 'down'  # instrument orientation
-    for raw_file in file_list:
-        # load the raw file, creating a xarray dataset object
-        ds = ep.open_raw(raw_file, sonar_model='AZFP', xml_path=xml_file)
-        ds['Platform']['platform_name'] = site         # OOI site name
-        ds['Platform']['platform_code_ICES'] = '3164'  # ICES SHIPC code
-        if 'HYPM' in site:
-            ds['Platform']['platform_type'] = 'Subsurface Mooring'  # ICES platform class 43
-        else:
-            ds['Platform']['platform_type'] = 'Mooring'   # ICES platform class 48
-
-        # save the data to NetCDF and zarr files (will automatically skip if already created)
-        ds.to_netcdf(Path(output_directory))
-        ds.to_zarr(Path(output_directory))
-
-        # process the data, calculating the volume acoustic backscatter strength and the vertical range
-        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)  # calculate Sv
-
-        # calculate the depth from the range and convert the channels dimension to frequency
-        ds_sv = ep.consolidate.add_depth(ds_sv, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
-        ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
-        data = ds_sv[['Sv', 'echo_range', 'depth']]     # extract the Sv, range and depth data
-
-        # rework the extracted dataset to make it easier to work with in further processing
-        data['range_sample'] = data['range_sample'].astype(np.int32)  # convert the data type for range_sample
-        data['echo_range'] = data['echo_range'].sel(ping_time=data.ping_time[0], drop=True)
-        data = data.set_coords('echo_range')   # setup range as a coordinate variable
-        data['depth'] = data['depth'].sel(ping_time=data.ping_time[0], drop=True)
-        data = data.set_coords('depth')        # setup depth as a coordinate variable
-        data = data.rename({'depth': 'nominal_depth'})
-        echo.append(data.sortby('ping_time'))  # append to the echogram list
+    desc = 'Converting and processing %d raw %s data files' % (len(file_list), zpls_model)
+    echo = [_process_file(file, site, output_directory, zpls_model, xml_file, tilt_correction)
+            for file in tqdm(file_list, desc=desc)]
 
     # concatenate the data into a single dataset
-    single_ds = xr.concat(echo, dim='ping_time', join='outer')
+    # single_ds = xr.concat(echo, dim='ping_time', join='outer')
+    single_ds = xr.combine_by_coords(echo, join='outer', combine_attrs='override')
+    del echo
 
-    # do a little memory management, echopype seems to leave a lot of detritus behind it...
-    del ds, ds_sv, data, echo
+    # manual garbage collection; echopype seems to leave a lot of detritus behind it
     n = 1
     while n > 0:
         n = gc.collect()
@@ -559,90 +533,181 @@ def process_azfp(site, data_directory, xml_file, output_directory, dates, tilt_c
     return sorted_ds
 
 
-def process_ek60(site, data_directory, output_directory, dates, tilt_correction):
+def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_correction):
+    """
+    Internal method used to do the conversion and processing of an individual
+    raw sonar data file.
+
+    :param file:
+    :param site:
+    :param output_directory:
+    :param zpls_model:
+    :param xml_file:
+    :param tilt_correction:
+    :return:
+    """
+    # convert and process the raw files using echopype
+    env_params = {
+        'temperature': site_config[site]['average_temperature'],  # temperature in degrees Celsius
+        'salinity': site_config[site]['average_salinity'],  # salinity in PSU
+        'pressure': site_config[site]['deployed_depth']  # approximate pressure (using depth m)
+    }
+    depth_offset = site_config[site]['depth_offset']  # height of sensor relative to site depth
+    downward = site_config[site]['instrument_orientation'] == 'down'  # instrument orientation
+    # load the raw file, creating a xarray dataset object
+    if zpls_model == 'AZFP':
+        ds = ep.open_raw(file, sonar_model=zpls_model, xml_path=xml_file)
+    else:
+        ds = ep.open_raw(file, sonar_model=zpls_model)
+
+    # add ICES metadata attributes
+    ds['Platform']['platform_name'] = site  # OOI site name
+    ds['Platform']['platform_code_ICES'] = '3164'  # ICES SHIPC code
+    if site == 'CE02SHBP':
+        ds['Platform']['platform_type'] = 'Fixed Benthic Node'  # ICES platform class 11
+    elif 'HYPM' in site:
+        ds['Platform']['platform_type'] = 'Subsurface Mooring'  # ICES platform class 43
+    else:
+        ds['Platform']['platform_type'] = 'Mooring'   # ICES platform class 48
+
+    # save the data to NetCDF and zarr files (will automatically skip if already created)
+    ds.to_netcdf(Path(output_directory))
+
+    # process the data, calculating the volume acoustic backscatter strength and the vertical range
+    ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)  # calculate Sv
+
+    # calculate the depth from the range and convert the channels dimension to frequency
+    ds_sv = ep.consolidate.add_depth(ds_sv, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
+    ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
+    data = ds_sv[['Sv', 'echo_range', 'depth']]  # extract the Sv, range and depth data
+
+    # rework the extracted dataset to make it easier to work with in further processing
+    data['range_sample'] = data['range_sample'].astype(np.int32)  # convert the data type for range_sample
+    data['echo_range'] = data['echo_range'].sel(ping_time=data.ping_time[0], drop=True)
+    data = data.set_coords('echo_range')  # setup range as a coordinate variable
+    data['depth'] = data['depth'].sel(ping_time=data.ping_time[0], drop=True)
+    data = data.set_coords('depth')  # setup depth as a coordinate variable
+    data = data.rename({'depth': 'nominal_depth'})
+    data = data.sortby('ping_time')
+    del ds, ds_sv
+
+    # # resample the EK60 data to 10-second ensemble averages, dropping NaN-filled intervals, to keep the size of
+    # # the resulting datasets manageable (full data rate is ~1 Hz and that just breaks things)
+    # if zpls_model == 'EK60':
+    #     avg = data.resample(ping_time='10s', base=3595, loffset='5s', skipna=True).median(dim='ping_time',
+    #                                                                                       keep_attrs=True)
+    #     data = avg.dropna(dim='ping_time', how='all')
+
+    return data
+
+
+def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml_file, **kwargs):
     """
 
     :param site:
     :param data_directory:
     :param output_directory:
     :param dates:
-    :param tilt_correction:
-    :return data:
+    :param zpls_model:
+    :param xml_file:
+    :return:
     """
-    # generate a list of data files given the input dates
-    file_list = ek60_file_list(data_directory, dates)
+    # assign the keyword arguments (defaults to None of not set)
+    tilt_correction = kwargs.get('tilt_correction')
+    deployed_depth = kwargs.get('deployed_depth')
+    vertical_range = kwargs.get('vertical_range')
+    colorbar_range = kwargs.get('colorbar_range')
 
-    # reset the file_list to a single index
-    file_list = [file for sub in file_list for file in sub]
-    if not file_list:
-        # if there are no files to process, exit cleanly
-        return None
+    # convert and process the data
+    if zpls_model not in ['AZFP', 'EK60']:
+        raise ValueError('The ZPLS model must be set as either AZFP or EK60 (case sensitive)')
+    else:
+        data = process_sonar_data(site, data_directory, output_directory, dates, zpls_model, xml_file, tilt_correction)
 
-    # sort the file list alphanumerically
-    file_list.sort()
+    # test to see if we have any data from the processing
+    if not data:
+        raise SystemExit('No data files were converted and processed. Check input settings, in particular the path '
+                         'to the raw data files for dates between %s and %s.' % (dates[0], dates[1]))
 
-    # make sure the data output directory exists
+    # save the full resolution processed data to daily NetCDF files
+    file_name = set_file_name(site, dates)
     output_directory = os.path.join(output_directory, dates[0] + '-' + dates[1])
-    if not os.path.isdir(output_directory):
-        os.mkdir(output_directory)
 
-    # convert and process the raw files using echopype
-    echo = []
-    env_params = {
-        'temperature': site_config[site]['average_temperature'],  # temperature in degrees Celsius
-        'salinity': site_config[site]['average_salinity'],  # salinity in PSU
-        'pressure': site_config[site]['deployed_depth']     # approximate pressure (using depth m)
-    }
-    depth_offset = site_config[site]['depth_offset']  # height of sensor relative to site depth
-    downward = site_config[site]['instrument_orientation'] == 'down'  # instrument orientation
-    for raw_file in file_list:
-        # load the raw file, creating a xarray dataset object
-        ds = ep.open_raw(raw_file, sonar_model='EK60')
-        ds['Platform']['platform_name'] = site         # OOI site name
-        ds['Platform']['platform_code_ICES'] = '3164'  # ICES SHIPC code
-        if site == 'CE02SHBP':
-            ds['Platform']['platform_type'] = 'Fixed Benthic Node'  # ICES platform class 11
-        else:
-            ds['Platform']['platform_type'] = 'Subsurface Mooring'  # ICES platform class 43
+    # reset data types (helps to control size of NetCDF files)
+    data['range_sample'] = data['range_sample'].astype(np.int32)
+    data['echo_range'] = data['echo_range'].astype(np.float32)
+    data['nominal_depth'] = data['nominal_depth'].astype(np.float32)
+    data['frequency_nominal'] = data['frequency_nominal'].astype(np.float32)
+    data['Sv'] = data['Sv'].astype(np.float32)
 
-        # save the data to NetCDF and zarr files (will automatically skip if already created)
-        ds.to_netcdf(Path(output_directory))
-        ds.to_zarr(Path(output_directory))
+    # split the data into daily records
+    days, datasets = zip(*data.groupby("ping_time.day"))
 
-        # process the data, calculating the volume acoustic backscatter strength and the vertical range
-        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)  # calculate Sv
+    # create a list of file names based on the day of the record
+    start = datetime.strptime(dates[0], '%Y%m%d')
+    stop = datetime.strptime(dates[1], '%Y%m%d')
+    date_list = [start + timedelta(days=x) for x in range(0, (stop - start).days)]
+    nc_file = os.path.join(output_directory, file_name)
+    nc_files = []
+    for day in days:
+        for dt in date_list:
+            if dt.day == day:
+                nc_files.append(nc_file + "_Full_%s.nc" % dt.strftime('%Y%m%d'))
 
-        # calculate the depth from the range and convert the channels dimension to frequency
-        ds_sv = ep.consolidate.add_depth(ds_sv, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
-        ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
-        data = ds_sv[['Sv', 'echo_range', 'depth']]  # extract the Sv, range and depth data
+    # convert ping_time from a datetime64[ns] object to a float (seconds since 1970) and update the attributes
+    for dataset in datasets:
+        dataset['ping_time'] = dataset['ping_time'].values.astype(np.float64) / 10.0 ** 9
+        dataset.attrs = attributes['global']
+        dataset.attrs['instrument_orientation'] = site_config[site]['instrument_orientation']
 
-        # rework the extracted dataset to make it easier to work with in further processing
-        data['range_sample'] = data['range_sample'].astype(np.int32)  # convert the data type for range_sample
-        data['echo_range'] = data['echo_range'].sel(ping_time=data.ping_time[0], drop=True)
-        data = data.set_coords('echo_range')  # setup range as a coordinate variable
-        data['depth'] = data['depth'].sel(ping_time=data.ping_time[0], drop=True)
-        data = data.set_coords('depth')  # setup depth as a coordinate variable
-        data = data.rename({'depth': 'nominal_depth'})
-        echo.append(data.sortby('ping_time'))  # append to the echogram list
+        for v in dataset.variables:
+            dataset[v].attrs = attributes[v]
 
-    # concatenate the data into a single dataset
-    single_ds = xr.concat(echo, dim='ping_time', join='outer')
+    # save the daily files
+    xr.save_mfdataset(datasets, nc_files, mode='w', format='NETCDF4', engine='h5netcdf')
 
-    # do a little memory management, echopype seems to leave a lot of detritus behind it...
-    del ds, ds_sv, data, echo
-    n = 1
-    while n > 0:
-        n = gc.collect()
+    # clean up any NaN's in the range values (some EK60 files seem to have this problem)
+    # data = data.dropna('range_sample', subset=['echo_range'])
 
-    # sort the data by the time
-    sorted_ds = single_ds.sortby('ping_time')
+    # if a global mooring, create hourly averaged data records, otherwise create 15-minute records
+    if 'HYPM' in site:
+        # resample the data into a 60 minute, median averaged record, filling gaps less than 180 minutes
+        avg = data.resample(ping_time='60Min').mean()
+        avg = avg.interpolate_na(dim='ping_time', max_gap='180Min')
+    else:
+        # resample the data into a 15 minute, median averaged record, filling gaps less than 45 minutes
+        avg = data.resample(ping_time='15Min', skipna=True).median(dim='ping_time', keep_attrs=True)
+        avg = avg.interpolate_na(dim='ping_time', max_gap='45Min')
 
-    # correct the range for instrument tilt
-    range_correction(sorted_ds, tilt_correction)
+    # generate the echogram
+    long_name = site_config[site]['long_name']
+    generate_echogram(avg, site, long_name, deployed_depth, output_directory, file_name, dates,
+                      vertical_range=vertical_range, colorbar_range=colorbar_range)
 
-    # pass the final, sorted Sv data back for further processing
-    return sorted_ds
+    # add the OOI logo as a watermark
+    echogram = os.path.join(output_directory, file_name + '.png')
+    echo_image = Image.open(echogram)
+    ooi_image = Image.open('ooi-logo.png')
+    width, height = echo_image.size
+    transparent = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    transparent.paste(echo_image, (0, 0))
+    if max(vertical_range) > 99:
+        transparent.paste(ooi_image, (96, 15), mask=ooi_image)
+    else:
+        transparent.paste(ooi_image, (80, 15), mask=ooi_image)
+
+    # re-save the echogram with the added logo
+    transparent.save(echogram)
+
+    # save the averaged data
+    avg['ping_time'] = avg['ping_time'].values.astype(np.float64) / 10.0 ** 9
+    avg.attrs = attributes['global']
+    avg.attrs['instrument_orientation'] = site_config[site]['instrument_orientation']
+    for v in avg.variables:
+        avg[v].attrs = attributes[v]
+
+    avg_file = nc_file + '_Averaged.nc'
+    avg.to_netcdf(avg_file, mode='w', format='NETCDF4', engine='h5netcdf')
 
 
 def main(argv=None):
@@ -708,97 +773,13 @@ def main(argv=None):
     if not os.path.isdir(output_directory):
         os.mkdir(output_directory)
 
-    # use the ZPLS model to determine how to process the data
-    data = None
+    # convert and process the data
     if zpls_model not in ['AZFP', 'EK60']:
-        raise ValueError('The ZPLS model must be set as either AZFP or EK60 (case insensitive)')
+        raise ValueError('The ZPLS model must be set as either AZFP or EK60 (case sensitive)')
     else:
-        if zpls_model == 'AZFP':
-            data = process_azfp(site, data_directory, xml_file, output_directory, dates, tilt_correction)
-
-        if zpls_model == 'EK60':
-            data = process_ek60(site, data_directory, output_directory, dates, tilt_correction)
-
-    # test to see if we have any data from the processing
-    if not data:
-        return None
-
-    # save the full resolution data to daily NetCDF files
-    file_name = set_file_name(site, dates)
-    output_directory = os.path.join(output_directory, dates[0] + '-' + dates[1])
-
-    # clean up any NaN's in the range values (some EK60 files seem to have this problem)
-    data = data.dropna('range_sample', subset=['echo_range'])
-
-    # reset a couple data types (helps to control size of NetCDF files)
-    data['echo_range'] = data['echo_range'].astype(np.float32)
-    data['Sv'] = data['Sv'].astype(np.float32)
-
-    # split the data into daily records
-    days, datasets = zip(*data.groupby("ping_time.day"))
-
-    # create a list of file names based on the day of the record
-    start = datetime.strptime(dates[0], '%Y%m%d')
-    stop = datetime.strptime(dates[1], '%Y%m%d')
-    date_list = [start + timedelta(days=x) for x in range(0, (stop - start).days)]
-    nc_file = os.path.join(output_directory, file_name)
-    nc_files = []
-    for day in days:
-        for dt in date_list:
-            if dt.day == day:
-                nc_files.append(nc_file + "_Full_%s.nc" % dt.strftime('%Y%m%d'))
-
-    # convert ping_time from a datetime64[ns] object to a float (seconds since 1970) and update the attributes
-    for dataset in datasets:
-        dataset['ping_time'] = dataset['ping_time'].values.astype(np.float64) / 10.0 ** 9
-        dataset.attrs = attributes['global']
-        dataset.attrs['instrument_orientation'] = site_config[site]['instrument_orientation']
-
-        for v in dataset.variables:
-            dataset[v].attrs = attributes[v]
-
-    # save the daily files
-    xr.save_mfdataset(datasets, nc_files, mode='w', format='NETCDF4', engine='h5netcdf')
-
-    # if a global mooring, create hourly averaged data records, otherwise create 15-minute records
-    if 'HYPM' in site:
-        # resample the data into a 60 minute, median averaged record, filling gaps less than 180 minutes
-        avg = data.resample(ping_time='60Min').mean()
-        avg = avg.interpolate_na(dim='ping_time', max_gap='180Min')
-    else:
-        # resample the data into a 15 minute, median averaged record, filling gaps less than 45 minutes
-        avg = data.resample(ping_time='15Min').median()
-        avg = avg.interpolate_na(dim='ping_time', max_gap='45Min')
-
-    # generate the echogram
-    long_name = site_config[site]['long_name']
-    generate_echogram(avg, site, long_name, deployed_depth, output_directory, file_name, dates,
-                      vertical_range=vertical_range, colorbar_range=colorbar_range)
-
-    # add the OOI logo as a watermark
-    echogram = os.path.join(output_directory, file_name + '.png')
-    echo_image = Image.open(echogram)
-    ooi_image = Image.open('ooi-logo.png')
-    width, height = echo_image.size
-    transparent = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-    transparent.paste(echo_image, (0, 0))
-    if max(vertical_range) > 99:
-        transparent.paste(ooi_image, (96, 15), mask=ooi_image)
-    else:
-        transparent.paste(ooi_image, (80, 15), mask=ooi_image)
-
-    # re-save the echogram with the added logo
-    transparent.save(echogram)
-
-    # save the averaged data
-    avg['ping_time'] = avg['ping_time'].values.astype(np.float64) / 10.0 ** 9
-    avg.attrs = attributes['global']
-    avg.attrs['instrument_orientation'] = site_config[site]['instrument_orientation']
-    for v in avg.variables:
-        avg[v].attrs = attributes[v]
-
-    avg_file = nc_file + '_Averaged.nc'
-    avg.to_netcdf(avg_file, mode='w', format='NETCDF4', engine='h5netcdf')
+        zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml_file,
+                      deployed_depth=deployed_depth, tilt_correction=tilt_correction,
+                      colorbar_range=colorbar_range, vertical_range=vertical_range)
 
 
 if __name__ == '__main__':

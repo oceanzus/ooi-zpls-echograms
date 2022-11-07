@@ -42,6 +42,7 @@ setup(name='ooi_zpls_echograms',
           'numpy',
           'pandas',
           'pillow',
+          'tqdm',
           'xarray'
       ],
       include_package_data=True,
