@@ -272,8 +272,7 @@ attributes = {
         'units': 'dB ',
         'comments': ('Initial estimate of the volume acoustic backscatter strength derived from the raw instrument '
                      'data using echopype to convert and process the data.'),
-        'ooi_data_product': 'SONBSCA_L1',
-        'references': 'https://echopype.readthedocs.io/en/latest/'
+        'ooi_data_product': 'SONBSCA_L1'
     }
 }
 
@@ -285,7 +284,7 @@ def set_file_name(site, dates):
 
     :param site: mooring site name
     :param dates: date range shown in the plot
-    :return file_name: file name as a string created from the inputs
+    :return: file name as a string created from the inputs
     """
     file_name = site + '_Bioacoustic_Echogram_' + dates[0] + '-' + dates[1] + '_Calibrated_Sv'
     return file_name
@@ -406,10 +405,10 @@ def range_correction(data, tilt_correction):
     """
     Apply a correction to the calculated range using the supplied tilt
     correction value instead of the instrument's measured tilt/roll values.
+    Adjusts the echo_range variable in the xarray object directly.
 
     :param data: xarray dataset with the calculated range
     :param tilt_correction: tilt correction value in degrees to use
-    :return None: adjusts the echo_range variable in the xarray object directly
     """
     data['echo_range'] = data.echo_range * np.cos(np.deg2rad(tilt_correction))
 
@@ -421,7 +420,7 @@ def azfp_file_list(data_directory, dates):
 
     :param data_directory: path to directory with the AZFP .01A files
     :param dates: starting and ending dates to use in generating the file list
-    :return file_list: list of potential .01A file names, including full path
+    :return: list of potential .01A file names, including full path
     """
     if len(dates) == 1:
         dates += [dates[0]]
@@ -450,7 +449,7 @@ def ek60_file_list(data_directory, dates):
 
     :param data_directory: path to directory with the EK60 .raw files
     :param dates: starting and ending dates to use in generating the file list
-    :return file_list: list of potential .raw file names, including full path
+    :return: list of potential .raw file names, including full path
     """
     if len(dates) == 1:
         dates += [dates[0]]
@@ -479,14 +478,24 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     step in the process of generating daily and averaged processed NetCDF files
     and echograms for use by the community.
 
-    :param site:
-    :param data_directory:
-    :param output_directory:
-    :param dates:
-    :param zpls_model:
-    :param xml_file:
-    :param tilt_correction:
-    :return:
+    :param site: Site name where the data was collected
+    :param data_directory: Source directory where the raw data files are
+        located (assumes a standardized file structure will be followed by the
+        OOI operators)
+    :param output_directory: Output directory to save the results
+    :param dates: Starting and ending dates to search for raw data files in the
+        data directory to convert and process
+    :param zpls_model: Model of bioacoustic sonar sensor used
+    :param xml_file: If the model is an AZFP, the xml_file (with instrument
+        calibration coefficients needed for the conversion) must also be
+        specified (usually just one per deployment)
+    :param tilt_correction: Tilt of the sonar transducers (typically 15
+        degrees for the uncabled sensors to avoid interference from the
+        riser elements)
+    :return: Converted and processed bioacoustic sonar data in a xarray
+        dataset object for the date range indicated by the dates input,
+        with the object sorted in time and checked to make sure the time
+        record is monotonic
     """
     # generate a list of data files given the input dates
     if zpls_model == 'AZFP':
@@ -514,8 +523,14 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
             for file in tqdm(file_list, desc=desc)]
 
     # concatenate the data into a single dataset
-    # single_ds = xr.concat(echo, dim='ping_time', join='outer')
-    single_ds = xr.combine_by_coords(echo, join='outer', combine_attrs='override')
+    try:
+        single_ds = xr.combine_by_coords(echo, join='outer', combine_attrs='override')
+    except ValueError as e:
+        single_ds = xr.concat(echo, dim='ping_time', join='outer', combine_attrs='override')
+        if 'ping_time' in single_ds.echo_range.indexes.keys():
+            single_ds['echo_range'] = single_ds['echo_range'].sel(ping_time=single_ds.ping_time[0], drop=True)
+            single_ds['nominal_depth'] = single_ds['nominal_depth'].sel(ping_time=single_ds.ping_time[0], drop=True)
+
     del echo
 
     # manual garbage collection; echopype seems to leave a lot of detritus behind it
@@ -523,8 +538,10 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     while n > 0:
         n = gc.collect()
 
-    # sort the data by the time
+    # sort the data by the time and make sure the time index is unique
     sorted_ds = single_ds.sortby('ping_time')
+    _, index = np.unique(sorted_ds['ping_time'], return_index=True)
+    sorted_ds = sorted_ds.isel(ping_time=index)
 
     # correct the range for instrument tilt
     range_correction(sorted_ds, tilt_correction)
@@ -535,16 +552,23 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
 
 def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_correction):
     """
-    Internal method used to do the conversion and processing of an individual
-    raw sonar data file.
+    Internal method used for the conversion and processing of an individual raw
+    sonar data file. While an internal method, this could still be used to
+    create a parallel processing method to speed up the conversion and
+    processing of the raw sonar data files.
 
-    :param file:
-    :param site:
-    :param output_directory:
-    :param zpls_model:
-    :param xml_file:
-    :param tilt_correction:
-    :return:
+    :param file: Individual raw sonar data file to process and convert
+    :param site: Site name where the data was collected
+    :param output_directory: Output directory to save the results
+    :param zpls_model: Model of bioacoustic sonar sensor used
+    :param xml_file: If the model is an AZFP, the xml_file (with instrument
+        calibration coefficients needed for the conversion) must also be
+        specified (usually just one per deployment)
+    :param tilt_correction: Tilt of the sonar transducers (typically 15
+        degrees for the uncabled sensors to avoid interference from the
+        riser elements)
+    :return: Converted and processed bioacoustic sonar data in a xarray
+        dataset object
     """
     # convert and process the raw files using echopype
     env_params = {
@@ -554,6 +578,7 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     }
     depth_offset = site_config[site]['depth_offset']  # height of sensor relative to site depth
     downward = site_config[site]['instrument_orientation'] == 'down'  # instrument orientation
+
     # load the raw file, creating a xarray dataset object
     if zpls_model == 'AZFP':
         ds = ep.open_raw(file, sonar_model=zpls_model, xml_path=xml_file)
@@ -570,7 +595,7 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     else:
         ds['Platform']['platform_type'] = 'Mooring'   # ICES platform class 48
 
-    # save the data to NetCDF and zarr files (will automatically skip if already created)
+    # save the data to a NetCDF file (will automatically skip if already created)
     ds.to_netcdf(Path(output_directory))
 
     # process the data, calculating the volume acoustic backscatter strength and the vertical range
@@ -580,43 +605,58 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     ds_sv = ep.consolidate.add_depth(ds_sv, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
     ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
     data = ds_sv[['Sv', 'echo_range', 'depth']]  # extract the Sv, range and depth data
+    del ds, ds_sv
 
     # rework the extracted dataset to make it easier to work with in further processing
+    # --- convert range to a coordinate
     data['range_sample'] = data['range_sample'].astype(np.int32)  # convert the data type for range_sample
     data['echo_range'] = data['echo_range'].sel(ping_time=data.ping_time[0], drop=True)
     data = data.set_coords('echo_range')  # setup range as a coordinate variable
+    # --- convert depth to a coordinate
     data['depth'] = data['depth'].sel(ping_time=data.ping_time[0], drop=True)
     data = data.set_coords('depth')  # setup depth as a coordinate variable
     data = data.rename({'depth': 'nominal_depth'})
-    data = data.sortby('ping_time')
-    del ds, ds_sv
 
-    # # resample the EK60 data to 10-second ensemble averages, dropping NaN-filled intervals, to keep the size of
-    # # the resulting datasets manageable (full data rate is ~1 Hz and that just breaks things)
-    # if zpls_model == 'EK60':
-    #     avg = data.resample(ping_time='10s', base=3595, loffset='5s', skipna=True).median(dim='ping_time',
-    #                                                                                       keep_attrs=True)
-    #     data = avg.dropna(dim='ping_time', how='all')
+    # make sure ping_time is monotonic and the time-stamps are unique
+    data = data.sortby('ping_time')
+    _, index = np.unique(data['ping_time'], return_index=True)
+    data = data.isel(ping_time=index)
 
     return data
 
 
 def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml_file, **kwargs):
     """
-
-    :param site:
-    :param data_directory:
-    :param output_directory:
-    :param dates:
-    :param zpls_model:
-    :param xml_file:
-    :return:
+    Main processing function to convert and process data from either the ASL
+    AZFP or the Kongsberg Simrad EK60
+    :param site: Site name where the data was collected
+    :param data_directory: Source directory where the raw data files are
+        located (assumes a standardized file structure will be followed by the
+        OOI operators)
+    :param output_directory: Output directory to save the results
+    :param dates: Starting and ending dates to search for raw data files in the
+        data directory to convert and process
+    :param zpls_model: Model of bioacoustic sonar sensor used
+    :param xml_file: If the model is an AZFP, the xml_file (with instrument
+        calibration coefficients needed for the conversion) must also be
+        specified (usually just one per deployment)
+    :kwargs tilt_correction: Tilt of the sonar transducers (typically 15
+        degrees for the uncabled sensors to avoid interference from the
+        riser elements)
+    :kwargs deployed_depth:
+    :kwargs vertical_range:
+    :kwargs colorbar_range:
     """
     # assign the keyword arguments (defaults to None of not set)
     tilt_correction = kwargs.get('tilt_correction')
     deployed_depth = kwargs.get('deployed_depth')
     vertical_range = kwargs.get('vertical_range')
     colorbar_range = kwargs.get('colorbar_range')
+
+    # determine if an xml_file has not been specified for AZFP data
+    if zpls_model == 'AZFP' and not xml_file:
+        raise ValueError('If the ZPLS model is AZFP, you must specify an XML file with the instrument '
+                         'configuration and calibration parameters.')
 
     # convert and process the data
     if zpls_model not in ['AZFP', 'EK60']:
@@ -667,7 +707,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     xr.save_mfdataset(datasets, nc_files, mode='w', format='NETCDF4', engine='h5netcdf')
 
     # clean up any NaN's in the range values (some EK60 files seem to have this problem)
-    # data = data.dropna('range_sample', subset=['echo_range'])
+    data = data.dropna('range_sample', subset=['echo_range'])
 
     # if a global mooring, create hourly averaged data records, otherwise create 15-minute records
     if 'HYPM' in site:
