@@ -39,7 +39,7 @@ site_config = {
         'tilt_correction': 0,
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 80],
-        'deployed_depth': 80,
+        'deployed_depth': 81,
         'depth_offset': 2.0,
         'average_salinity': 33,
         'average_temperature': 10,
@@ -53,7 +53,7 @@ site_config = {
         'deployed_depth': 200,
         'depth_offset': 0.0,
         'average_salinity': 33,
-        'average_temperature': 10,
+        'average_temperature': 9,
         'instrument_orientation': 'up'
     },
     'CE06ISSM': {
@@ -64,7 +64,7 @@ site_config = {
         'deployed_depth': 29,
         'depth_offset': 1.0,
         'average_salinity': 33,
-        'average_temperature': 10,
+        'average_temperature': 11,
         'instrument_orientation': 'up'
     },
     'CE07SHSM': {
@@ -75,7 +75,7 @@ site_config = {
         'deployed_depth': 87,
         'depth_offset': 1.0,
         'average_salinity': 33,
-        'average_temperature': 10,
+        'average_temperature': 9,
         'instrument_orientation': 'up'
     },
     'CE09OSSM': {
@@ -86,7 +86,7 @@ site_config = {
         'deployed_depth': 542,
         'depth_offset': 1.0,
         'average_salinity': 33,
-        'average_temperature': 5,
+        'average_temperature': 8,
         'instrument_orientation': 'up'
     },
     'CP01CNSM': {
@@ -96,8 +96,8 @@ site_config = {
         'vertical_range': [0, 135],
         'deployed_depth': 135,
         'depth_offset': 1.0,
-        'average_salinity': 34,
-        'average_temperature': 7,
+        'average_salinity': 35,
+        'average_temperature': 13,
         'instrument_orientation': 'up'
     },
     'CP03ISSM': {
@@ -105,21 +105,21 @@ site_config = {
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 95],
-        'deployed_depth': 95,
+        'deployed_depth': 92,
         'depth_offset': 1.0,
         'average_salinity': 34,
-        'average_temperature': 7,
+        'average_temperature': 14,
         'instrument_orientation': 'up'
     },
     'CP04OSSM': {
         'long_name': 'Coastal Pioneer, Offshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
-        'vertical_range': [0, 450],
-        'deployed_depth': 450,
+        'vertical_range': [0, 455],
+        'deployed_depth': 455,
         'depth_offset': 1.0,
-        'average_salinity': 34,
-        'average_temperature': 7,
+        'average_salinity': 35,
+        'average_temperature': 12,
         'instrument_orientation': 'up'
     },
     'GI02HYPM_UPPER': {
@@ -129,7 +129,7 @@ site_config = {
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0.0,
-        'average_salinity': 34,
+        'average_salinity': 35,
         'average_temperature': 5,
         'instrument_orientation': 'up'
     },
@@ -140,7 +140,7 @@ site_config = {
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
-        'average_salinity': 34,
+        'average_salinity': 35,
         'average_temperature': 5,
         'instrument_orientation': 'down'
     },
@@ -151,8 +151,8 @@ site_config = {
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
-        'average_salinity': 34,
-        'average_temperature': 5,
+        'average_salinity': 33,
+        'average_temperature': 6,
         'instrument_orientation': 'up'
     },
     'GP02HYPM_LOWER': {
@@ -162,8 +162,8 @@ site_config = {
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
-        'average_salinity': 34,
-        'average_temperature': 5,
+        'average_salinity': 33,
+        'average_temperature': 6,
         'instrument_orientation': 'down'
     },
     'GA02HYPM_UPPER': {
@@ -174,7 +174,7 @@ site_config = {
         'deployed_depth': 150,
         'depth_offset': 0,
         'average_salinity': 34,
-        'average_temperature': 5,
+        'average_temperature': 8,
         'instrument_orientation': 'up'
     },
     'GA02HYPM_LOWER': {
@@ -185,7 +185,7 @@ site_config = {
         'deployed_depth': 150,
         'depth_offset': -1.62,
         'average_salinity': 34,
-        'average_temperature': 5,
+        'average_temperature': 8,
         'instrument_orientation': 'down'
     },
     'GS02HYPM_UPPER': {
@@ -196,7 +196,7 @@ site_config = {
         'deployed_depth': 150,
         'depth_offset': 0,
         'average_salinity': 34,
-        'average_temperature': 5,
+        'average_temperature': 7,
         'instrument_orientation': 'up'
     },
     'GS02HYPM_LOWER': {
@@ -207,7 +207,7 @@ site_config = {
         'deployed_depth': 150,
         'depth_offset': -1.62,
         'average_salinity': 34,
-        'average_temperature': 5,
+        'average_temperature': 7,
         'instrument_orientation': 'down'
     }
 }
