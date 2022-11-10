@@ -585,7 +585,7 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     ds['Platform']['platform_code_ICES'] = '3164'  # ICES SHIPC code
     if site == 'CE02SHBP':
         ds['Platform']['platform_type'] = 'Fixed Benthic Node'  # ICES platform class 11
-    elif 'HYPM' in site:
+    elif site == 'CE04OSPS' or 'HYPM' in site:
         ds['Platform']['platform_type'] = 'Subsurface Mooring'  # ICES platform class 43
     else:
         ds['Platform']['platform_type'] = 'Mooring'   # ICES platform class 48
@@ -623,7 +623,14 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
 def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml_file, **kwargs):
     """
     Main processing function to convert and process data from either the ASL
-    AZFP or the Kongsberg Simrad EK60
+    AZFP or the Kongsberg Simrad EK60. Uses echopype to convert the raw data
+    files (saving the converted data in NetCDF files that conform to the
+    SONAR-NetCDF4 ICES convention) and then further processes the data by
+    applying instrument calibration coefficients to calculate the volume
+    acoustic backscattering strength (Sv re 1-m). Processed data is saved to
+    daily files at full resolution and then temporally averaged to create
+    echogram plots for the date range specified (averaged data is also saved).
+
     :param site: Site name where the data was collected
     :param data_directory: Source directory where the raw data files are
         located (assumes a standardized file structure will be followed by the
@@ -638,9 +645,11 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     :kwargs tilt_correction: Tilt of the sonar transducers (typically 15
         degrees for the uncabled sensors to avoid interference from the
         riser elements)
-    :kwargs deployed_depth:
-    :kwargs vertical_range:
-    :kwargs colorbar_range:
+    :kwargs deployed_depth: Deployment depth of the instrument
+    :kwargs vertical_range: Vertical range to use in setting the extent of the
+        y-axis in the echogram plots
+    :kwargs colorbar_range: Volume acoustic backscattering strength range to
+        use for the colorbar
     """
     # assign the keyword arguments (defaults to None of not set)
     tilt_correction = kwargs.get('tilt_correction')
@@ -711,7 +720,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     # if a global mooring, create hourly averaged data records, otherwise create 15-minute records
     if 'HYPM' in site:
         # resample the data into a 60 minute, median averaged record, filling gaps less than 180 minutes
-        avg = data.resample(ping_time='60Min').mean()
+        avg = data.resample(ping_time='60Min', skipna=True).median(dim='ping_time', keep_attrs=True)
         avg = avg.interpolate_na(dim='ping_time', max_gap='180Min')
     else:
         # resample the data into a 15 minute, median averaged record, filling gaps less than 45 minutes
