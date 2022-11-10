@@ -71,7 +71,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Washington Shelf Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
-        'vertical_range': [0, 87],
+        'vertical_range': [0, 90],
         'deployed_depth': 87,
         'depth_offset': 1.0,
         'average_salinity': 33,
@@ -93,7 +93,7 @@ site_config = {
         'long_name': 'Coastal Pioneer, Central Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
-        'vertical_range': [0, 140],
+        'vertical_range': [0, 135],
         'deployed_depth': 135,
         'depth_offset': 1.0,
         'average_salinity': 34,
@@ -104,7 +104,7 @@ site_config = {
         'long_name': 'Coastal Pioneer, Inshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
-        'vertical_range': [0, 100],
+        'vertical_range': [0, 95],
         'deployed_depth': 95,
         'depth_offset': 1.0,
         'average_salinity': 34,
@@ -115,7 +115,7 @@ site_config = {
         'long_name': 'Coastal Pioneer, Offshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
-        'vertical_range': [0, 460],
+        'vertical_range': [0, 450],
         'deployed_depth': 450,
         'depth_offset': 1.0,
         'average_salinity': 34,
@@ -126,7 +126,7 @@ site_config = {
         'long_name': 'Global Irminger Sea, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
-        'vertical_range': [0, 200],
+        'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0.0,
         'average_salinity': 34,
@@ -148,7 +148,7 @@ site_config = {
         'long_name': 'Global Station Papa, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
-        'vertical_range': [0, 200],
+        'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
         'average_salinity': 34,
@@ -170,7 +170,7 @@ site_config = {
         'long_name': 'Global Argentine Basin, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
-        'vertical_range': [0, 200],
+        'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
         'average_salinity': 34,
@@ -192,7 +192,7 @@ site_config = {
         'long_name': 'Global Southern Ocean, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
-        'vertical_range': [0, 200],
+        'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
         'average_salinity': 34,
@@ -512,11 +512,6 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     # sort the file list alphanumerically
     file_list.sort()
 
-    # make sure the data output directory exists
-    output_directory = os.path.join(output_directory, dates[0] + '-' + dates[1])
-    if not os.path.isdir(output_directory):
-        os.mkdir(output_directory)
-
     # convert and process the raw files using echopype
     desc = 'Converting and processing %d raw %s data files' % (len(file_list), zpls_model)
     echo = [_process_file(file, site, output_directory, zpls_model, xml_file, tilt_correction)
@@ -653,7 +648,12 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     vertical_range = kwargs.get('vertical_range')
     colorbar_range = kwargs.get('colorbar_range')
 
-    # determine if an xml_file has not been specified for AZFP data
+    # make sure the data output directory exists
+    output_directory = os.path.join(output_directory, dates[0] + '-' + dates[1])
+    if not os.path.isdir(output_directory):
+        os.mkdir(output_directory)
+
+    # determine if a xml_file has not been specified for AZFP data
     if zpls_model == 'AZFP' and not xml_file:
         raise ValueError('If the ZPLS model is AZFP, you must specify an XML file with the instrument '
                          'configuration and calibration parameters.')
@@ -671,7 +671,6 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
 
     # save the full resolution processed data to daily NetCDF files
     file_name = set_file_name(site, dates)
-    output_directory = os.path.join(output_directory, dates[0] + '-' + dates[1])
 
     # reset data types (helps to control size of NetCDF files)
     data['range_sample'] = data['range_sample'].astype(np.int32)
