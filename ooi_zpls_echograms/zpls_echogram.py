@@ -105,7 +105,7 @@ site_config = {
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
         'vertical_range': [0, 95],
-        'deployed_depth': 92,
+        'deployed_depth': 95,
         'depth_offset': 1.0,
         'average_salinity': 34,
         'average_temperature': 14,
