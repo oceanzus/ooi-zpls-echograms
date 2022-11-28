@@ -15,12 +15,14 @@ import xarray as xr
 
 from calendar import monthrange
 from datetime import datetime, date, timedelta
+from importlib.resources import files
 from pandas.plotting import register_matplotlib_converters
 from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
 warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
 register_matplotlib_converters()
 site_config = {
     'CE01ISSM': {
@@ -436,8 +438,9 @@ def azfp_file_list(data_directory, dates):
     file_list = []
     for i in range(delta.days + 1):
         day = sdate + timedelta(days=i)
-        files = glob.glob(os.path.join(data_directory, day.strftime('%Y%m')) + '/' + day.strftime('%y%m%d') + '*.01A')
-        file_list.append(files)
+        azfp_files = glob.glob(os.path.join(data_directory, day.strftime('%Y%m')) + '/'
+                               + day.strftime('%y%m%d') + '*.01A')
+        file_list.append(azfp_files)
 
     return file_list
 
@@ -465,8 +468,8 @@ def ek60_file_list(data_directory, dates):
     file_list = []
     for i in range(delta.days + 1):
         day = sdate + timedelta(days=i)
-        files = glob.glob(os.path.join(data_directory, day.strftime('%m'), day.strftime('%d')) + '/*.raw')
-        file_list.append(files)
+        ek60_files = glob.glob(os.path.join(data_directory, day.strftime('%m'), day.strftime('%d')) + '/*.raw')
+        file_list.append(ek60_files)
 
     return file_list
 
@@ -520,7 +523,7 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     # concatenate the data into a single dataset
     try:
         single_ds = xr.combine_by_coords(echo, join='outer', combine_attrs='override')
-    except ValueError as e:
+    except ValueError:
         single_ds = xr.concat(echo, dim='ping_time', join='outer', combine_attrs='override')
         if 'ping_time' in single_ds.echo_range.indexes.keys():
             single_ds['echo_range'] = single_ds['echo_range'].sel(ping_time=single_ds.ping_time[0], drop=True)
@@ -660,7 +663,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     # make sure the data output directory exists
     output_directory = os.path.join(output_directory, dates[0] + '-' + dates[1])
     if not os.path.isdir(output_directory):
-        os.mkdir(output_directory)
+        os.makedirs(output_directory, exist_ok=True)
 
     # determine if a xml_file has not been specified for AZFP data
     if zpls_model == 'AZFP' and not xml_file:
@@ -735,7 +738,8 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     # add the OOI logo as a watermark
     echogram = os.path.join(output_directory, file_name + '.png')
     echo_image = Image.open(echogram)
-    ooi_image = Image.open('ooi-logo.png')
+    # noinspection PyTypeChecker
+    ooi_image = Image.open(files('ooi_zpls_echograms').joinpath('ooi-logo.png'))
     width, height = echo_image.size
     transparent = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     transparent.paste(echo_image, (0, 0))
@@ -819,7 +823,7 @@ def main(argv=None):
 
     # make sure the root output directory exists
     if not os.path.isdir(output_directory):
-        os.mkdir(output_directory)
+        os.makedirs(output_directory, exist_ok=True)
 
     # convert and process the data
     if zpls_model not in ['AZFP', 'EK60']:
