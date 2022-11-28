@@ -1,16 +1,18 @@
-name: echopype
+name: echogram
 channels:
   - defaults
   - conda-forge
 dependencies:
-  - python>=3.8
-  - pip
+  - python=3.8
+  - argcomplete
   - cmocean
-  - echopype==0.5.4
-  - h5netcdf==0.11.0
+  - echopype
+  - h5netcdf
   - matplotlib
   - numpy
   - pandas
   - pillow
+  - pip
   - python-dateutil
+  - tqdm
   - xarray

@@ -37,11 +37,12 @@ setup(name='ooi_zpls_echograms',
       install_requires=[
           'cmocean',
           'python-dateutil',
-          'echopype==0.5.4',
+          'echopype',
           'matplotlib',
           'numpy',
           'pandas',
           'pillow',
+          'tqdm',
           'xarray'
       ],
       include_package_data=True,
