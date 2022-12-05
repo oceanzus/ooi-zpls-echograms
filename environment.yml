@@ -3,10 +3,12 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python=3.8
+  - python>=3.9
   - argcomplete
+  - bottleneck
   - cmocean
-  - echopype
+  - conda-build
+  - echopype>=0.6.3
   - h5netcdf
   - matplotlib
   - numpy

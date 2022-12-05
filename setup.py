@@ -1,11 +1,13 @@
 from setuptools import setup, find_packages
 
 
+# read the contents of the README file
 def readme():
-    with open('README.md') as f:
+    with open('README.md', encoding='utf-8') as f:
         return f.read()
 
 
+# read the contents of the VERSION file
 def version():
     with open('VERSION.txt') as f:
         return f.read().strip()
@@ -20,10 +22,12 @@ setup(name='ooi_zpls_echograms',
           'of, the bio-acoustic data collected across the multiple OOI arrays.'
       ),
       long_description=readme(),
+      long_description_content_type='text/markdown',
       classifiers=[
           'Development Status :: 3 - Alpha',
           'License :: OSI Approved :: MIT License',
-          'Programming Language :: Python :: 3.8',
+          'Programming Language :: Python :: 3.9',
+          'Programming Language :: Python :: 3.10',
           'Topic :: Data Parsing :: Scientific :: OOI :: Ocean Sonar :: Zooplankton',
       ],
       keywords=(
@@ -33,17 +37,22 @@ setup(name='ooi_zpls_echograms',
       author='Ocean Observatories Initiative',
       author_email='helpdesk@oceanobservatories.org',
       license='MIT',
-      packages=find_packages(),
       install_requires=[
+          'bottleneck',
           'cmocean',
           'python-dateutil',
-          'echopype',
+          'echopype>=0.6.3',
+          'h5netcdf',
           'matplotlib',
           'numpy',
           'pandas',
           'pillow',
+          'python-dateutil',
           'tqdm',
           'xarray'
       ],
+      packages=find_packages(where="ooi_zpls_echograms"),
+      package_dir={'': 'ooi_zpls_echograms'},
       include_package_data=True,
-      zip_safe=False)
+      zip_safe=False
+      )
