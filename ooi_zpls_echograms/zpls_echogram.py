@@ -377,7 +377,7 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
     ht = fig.suptitle('{} ({})\n{} to {} UTC\n{} m nominal deployment depth'.format(long_name, site[:8], start_date,
                                                                                     stop_date, deployed_depth))
     ht.set_horizontalalignment('left')
-    ht.set_position([0.301, 0.94])  # position title to the left
+    ht.set_position([0.257, 0.94])  # position title to the left
 
     # populate the subplots
     im = []
