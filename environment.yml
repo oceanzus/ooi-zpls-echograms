@@ -8,7 +8,7 @@ dependencies:
   - bottleneck
   - cmocean
   - conda-build
-  - echopype>=0.6.3
+  - echopype>=0.8.1
   - h5netcdf
   - matplotlib
   - numpy
