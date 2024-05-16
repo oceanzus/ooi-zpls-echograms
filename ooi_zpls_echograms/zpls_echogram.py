@@ -468,7 +468,7 @@ def ek60_file_list(data_directory, dates):
     file_list = []
     for i in range(delta.days + 1):
         day = sdate + timedelta(days=i)
-        ek60_files = glob.glob(os.path.join(data_directory, day.strftime('%m'), day.strftime('%d')) + '/*.raw')
+        ek60_files = glob.glob(os.path.join(data_directory, day.strftime('%Y'), day.strftime('%m'), day.strftime('%d')) + '/*.raw')
         file_list.append(ek60_files)
 
     return file_list
@@ -516,7 +516,7 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     file_list.sort()
 
     # convert and process the raw files using echopype
-    desc = 'Converting and processing %d raw %s data files' % (len(file_list), zpls_model)
+    desc = 'Converting and processing %d raw %s data files [%s]' % (len(file_list), zpls_model, dates)
     echo = [_process_file(file, site, output_directory, zpls_model, xml_file, tilt_correction)
             for file in tqdm(file_list, desc=desc)]
 
@@ -597,7 +597,17 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     ds.to_netcdf(Path(output_directory))
 
     # process the data, calculating the volume acoustic backscatter strength and the vertical range
-    ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)  # calculate Sv
+    '''
+    The EK80 echosounder can be configured to transmit either broadband (waveform_mode="BB") or narrowband (waveform_mode="CW") signals. 
+    When transmitting in broadband mode, the returned echoes are encoded as complex samples (encode_mode="complex"). 
+    When transmitting in narrowband mode, the returned echoes can be encoded either as complex samples (encode_mode="complex") 
+    or as power/angle combinations (encode_mode="power") in a format similar to those recorded by EK60 echosounders.
+    '''
+    if zpls_model == 'EK80':
+        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode='CW',
+                                        encode_mode='power')  # calculate Sv
+    else:
+        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)  # calculate Sv
 
     # calculate the depth from the range and convert the channels dimension to frequency
     ds_sv = ep.consolidate.add_depth(ds_sv, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
@@ -671,8 +681,8 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
                          'configuration and calibration parameters.')
 
     # convert and process the data
-    if zpls_model not in ['AZFP', 'EK60']:
-        raise ValueError('The ZPLS model must be set as either AZFP or EK60 (case sensitive)')
+    if zpls_model not in ['AZFP', 'EK60', 'EK80']:
+        raise ValueError('The ZPLS model must be set as either AZFP, EK60, or EK80 (case sensitive)')
     else:
         data = process_sonar_data(site, data_directory, output_directory, dates, zpls_model, xml_file, tilt_correction)
 
@@ -777,7 +787,7 @@ def main(argv=None):
                         help=('Date range to plot as either YYYYMM or YYYYMMDD. Specifying an end date is optional, '
                               'it will be assumed to be 1 month or 1 day depending on input.'))
     parser.add_argument('-zm', '--zpls_model', dest='zpls_model', type=str, required=True,
-                        help='Specifies the ZPLS instrument model, either AZFP or EK60.')
+                        help='Specifies the ZPLS instrument model, either AZFP, EK60, EK80.')
     parser.add_argument('-xf', '--xml_file', dest='xml_file', type=str, required=False,
                         help='The path to .XML file used to process the AZFP data in the .01A files')
     parser.add_argument('-tc', '--tilt_correction', dest='tilt_correction', type=int, required=False,
@@ -826,8 +836,8 @@ def main(argv=None):
         os.makedirs(output_directory, exist_ok=True)
 
     # convert and process the data
-    if zpls_model not in ['AZFP', 'EK60']:
-        raise ValueError('The ZPLS model must be set as either AZFP or EK60 (case sensitive)')
+    if zpls_model not in ['AZFP', 'EK60', 'EK80']:
+        raise ValueError('The ZPLS model must be set as either AZFP, EK60, or EK80 (case sensitive)')
     else:
         zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml_file,
                       deployed_depth=deployed_depth, tilt_correction=tilt_correction,
