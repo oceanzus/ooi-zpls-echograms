@@ -382,7 +382,8 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
     # populate the subplots
     im = []
     for index in range(len(frequency_list)):
-        im.append(data.isel(frequency_nominal=index).Sv.plot(x='ping_time', y='echo_range', vmin=v_min, vmax=v_max,
+        # TODO: It feels like I need to dropna here as well...
+        im.append(data.isel(frequency_nominal=index).Sv.sortby('ping_time').plot(x='ping_time', y='echo_range', vmin=v_min, vmax=v_max,
                                                              ax=ax[index], cmap=my_cmap, add_colorbar=False))
         ax_config(ax[index], frequency_list[index])
 
@@ -633,7 +634,7 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     return data
 
 
-def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml_file, **kwargs):
+def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml_file, make_echogram, **kwargs):
     """
     Main processing function to convert and process data from either the ASL
     AZFP or the Kongsberg Simrad EK60. Uses echopype to convert the raw data
@@ -655,6 +656,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     :param xml_file: If the model is an AZFP, the xml_file (with instrument
         calibration coefficients needed for the conversion) must also be
         specified (usually just one per deployment)
+    :param make_echogram: Boolean whether to process the echogram PNG output
     :kwargs tilt_correction: Tilt of the sonar transducers (typically 15
         degrees for the uncabled sensors to avoid interference from the
         riser elements)
@@ -694,6 +696,10 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     # save the full resolution processed data to daily NetCDF files
     file_name = set_file_name(site, dates)
 
+    # clean the interwoven NaN values out due to the different sampling rates on the channels
+    if zpls_model == 'EK80':
+        data['Sv'] = data["Sv"].dropna(dim="ping_time", how="all")
+
     # reset data types (helps to control size of NetCDF files)
     data['range_sample'] = data['range_sample'].astype(np.int32)
     data['echo_range'] = data['echo_range'].astype(np.float32)
@@ -703,6 +709,11 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
 
     # split the data into daily records
     days, datasets = zip(*data.groupby("ping_time.day"))
+
+    # TODO: maybe a EK80 thing...or from processing one day of data, doesn't seem correct to do this
+    # fixes dataset count to match day/file _Full count
+    if zpls_model == 'EK80':
+        datasets = datasets[:-1]
 
     # create a list of file names based on the day of the record
     start = datetime.strptime(dates[0], '%Y%m%d')
@@ -728,38 +739,42 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     xr.save_mfdataset(datasets, nc_files, mode='w', format='NETCDF4', engine='h5netcdf')
 
     # clean up any NaN's in the range values (some EK60 files seem to have this problem)
-    data = data.dropna('range_sample', subset=['echo_range'])
+    if zpls_model != 'EK80':
+        data = data.dropna('range_sample', subset=['echo_range'])
 
     # if a global mooring, create hourly averaged data records, otherwise create 15-minute records
     if 'HYPM' in site:
         # resample the data into a 60 minute, median averaged record, filling gaps less than 180 minutes
         avg = data.resample(ping_time='60Min', skipna=True).median(dim='ping_time', keep_attrs=True)
         avg = avg.interpolate_na(dim='ping_time', max_gap='180Min')
+    if zpls_model == 'EK80':
+        avg = data.resample(ping_time='15Min', skipna=True).median(dim='ping_time', keep_attrs=True)
+        # avg = avg.interpolate_na(dim='ping_time', max_gap='45Min')
     else:
         # resample the data into a 15 minute, median averaged record, filling gaps less than 45 minutes
         avg = data.resample(ping_time='15Min', skipna=True).median(dim='ping_time', keep_attrs=True)
         avg = avg.interpolate_na(dim='ping_time', max_gap='45Min')
 
     # generate the echogram
-    long_name = site_config[site]['long_name']
-    generate_echogram(avg, site, long_name, deployed_depth, output_directory, file_name, dates,
-                      vertical_range=vertical_range, colorbar_range=colorbar_range)
+    if make_echogram:
+        long_name = site_config[site]['long_name']
+        generate_echogram(avg, site, long_name, deployed_depth, output_directory, file_name, dates, vertical_range=vertical_range, colorbar_range=colorbar_range)
 
-    # add the OOI logo as a watermark
-    echogram = os.path.join(output_directory, file_name + '.png')
-    echo_image = Image.open(echogram)
-    # noinspection PyTypeChecker
-    ooi_image = Image.open(files('ooi_zpls_echograms').joinpath('ooi-logo.png'))
-    width, height = echo_image.size
-    transparent = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-    transparent.paste(echo_image, (0, 0))
-    if max(vertical_range) > 99:
-        transparent.paste(ooi_image, (96, 15), mask=ooi_image)
-    else:
-        transparent.paste(ooi_image, (80, 15), mask=ooi_image)
+        # add the OOI logo as a watermark
+        echogram = os.path.join(output_directory, file_name + '.png')
+        echo_image = Image.open(echogram)
+        # noinspection PyTypeChecker
+        ooi_image = Image.open(files('ooi_zpls_echograms').joinpath('ooi-logo.png'))
+        width, height = echo_image.size
+        transparent = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        transparent.paste(echo_image, (0, 0))
+        if max(vertical_range) > 99:
+            transparent.paste(ooi_image, (96, 15), mask=ooi_image)
+        else:
+            transparent.paste(ooi_image, (80, 15), mask=ooi_image)
 
-    # re-save the echogram with the added logo
-    transparent.save(echogram)
+        # re-save the echogram with the added logo
+        transparent.save(echogram)
 
     # save the averaged data
     avg['ping_time'] = avg['ping_time'].values.astype(np.float64) / 10.0 ** 9
